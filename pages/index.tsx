@@ -4,35 +4,19 @@ import React, { useEffect, useRef, useState } from "react";
 
 // wsd --url ws://localhost:8080/echo
 
-const EditableElement = (props: { onChange: (a: string) => void }) => {
-  const { onChange } = props;
-  const element = useRef(null);
-
-  const onMouseUp = () => {
-    const value = element.current?.value || element.current?.innerText;
-    console.log(onChange);
-    if (onChange) {
-      onChange(value);
-    }
-  };
-
-  useEffect(() => {
-    const value = element.current?.value || element.current?.innerText;
-    if (onChange) {
-      onChange(value);
-    }
-  }, []);
-
-  return <div contentEditable ref={element} onKeyUp={onMouseUp}></div>;
-};
-
 enum Status {
+  Success = "success",
+  Error = "error",
+}
+
+enum Type {
   First = "first",
   Normal = "normal",
 }
 
-type Message = {
+type ClientMessage = {
   status: Status;
+  type: Type;
   data: string;
 };
 
@@ -44,8 +28,9 @@ export default function Home() {
   const fetchInitial = () => {
     if (!ws.current) return;
 
-    const message: Message = {
-      status: Status.First,
+    const message: ClientMessage = {
+      status: Status.Success,
+      type: Type.First,
       data: "",
     };
 
@@ -53,7 +38,7 @@ export default function Home() {
   };
 
   useEffect(() => {
-    ws.current = new WebSocket("ws://localhost:8000/echo");
+    ws.current = new WebSocket("ws://localhost:8000/write");
 
     ws.current.onopen = function (evt) {
       fetchInitial();
@@ -66,7 +51,10 @@ export default function Home() {
       ws.current = null;
     };
     ws.current.onmessage = function (evt) {
-      console.log("RESPONSE: " + evt.data);
+      console.log(evt.data);
+      const r = JSON.parse(evt.data);
+      console.log(r);
+      setInitialVal(r["data"]);
     };
     ws.current.onerror = function (evt) {
       setIsOpen(false);
@@ -80,12 +68,13 @@ export default function Home() {
     };
   }, [setIsOpen]);
 
-  const onChange2 = () => {
+  const onChange = () => {
     return (val) => {
       if (!ws.current) return;
 
-      const message: Message = {
-        status: Status.Normal,
+      const message: ClientMessage = {
+        status: Status.Success,
+        type: Type.Normal,
         data: val(),
       };
 
@@ -94,21 +83,6 @@ export default function Home() {
       }
 
       ws.current.send(JSON.stringify(message));
-    };
-  };
-
-  const onChange = (ws: WebSocket) => {
-    if (ws === undefined) {
-      return;
-    }
-
-    return (a: string) => {
-      if (a.length > 536870888) {
-        window.alert("oh no, we're writing too much!");
-      }
-      console.log("send: " + a);
-
-      ws.send(a);
     };
   };
 
@@ -122,9 +96,7 @@ export default function Home() {
       </Head>
 
       <main>
-        <h1 className="title">write here</h1>
-        <Editor value={initialVal} onChange={onChange2()} />
-        {/* <EditableElement onChange={onChange(ws)} /> */}
+        <Editor value={initialVal} onChange={onChange()} />
       </main>
     </div>
   );
