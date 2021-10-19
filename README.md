@@ -1,1 +1,3 @@
-This is a starter template for [Learn Next.js](https://nextjs.org/learn).
+# markdown editor
+
+Markdown editor to use with Websocket server [here](https://github.com/iamkahvi/go_markdown_server).
