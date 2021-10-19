@@ -51,9 +51,8 @@ export default function Home() {
       ws.current = null;
     };
     ws.current.onmessage = function (evt) {
-      console.log(evt.data);
       const r = JSON.parse(evt.data);
-      console.log(r);
+      // console.log(r);
       setInitialVal(r["data"]);
     };
     ws.current.onerror = function (evt) {
