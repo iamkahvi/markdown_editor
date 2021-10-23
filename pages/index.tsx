@@ -39,8 +39,7 @@ export default function Home() {
   const ws = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
   const [initialVal, setInitialVal] = useState("");
-  const [editorState, setEditorState] = useState(EditorState.WAITING);
-  const [message, setMessage] = useState(makeMessage(""));
+  var timerId;
 
   const fetchInitial = () => {
     if (!ws.current) return;
@@ -59,14 +58,12 @@ export default function Home() {
 
     ws.current.onopen = function (evt) {
       setIsOpen(true);
-      setEditorState(EditorState.WAITING);
       fetchInitial();
       console.log("OPEN");
     };
 
     ws.current.onclose = function (evt) {
       setIsOpen(false);
-      setEditorState(EditorState.WAITING);
       ws.current = null;
       console.log("CLOSE");
     };
@@ -83,7 +80,6 @@ export default function Home() {
 
     ws.current.onerror = function (evt) {
       setIsOpen(false);
-      setEditorState(EditorState.WAITING);
       console.log("ERROR: " + evt.data);
     };
 
@@ -92,32 +88,14 @@ export default function Home() {
     return () => {
       wsCurr.close();
     };
-  }, [setIsOpen, setEditorState]);
-
-  useEffect(() => {
-    console.log("editor state use effect" + editorState.toString());
-
-    // How to make sure the editorState is WAITING
-    // for a certain amount of time?
-
-    // At the moment I'm just checking the beginning and end
-    if (editorState == EditorState.WAITING) {
-      setTimeout(() => {
-        if (editorState == EditorState.WAITING && isOpen) {
-          console.log("sending through the socket");
-          ws.current.send(JSON.stringify(message));
-        }
-      }, 2 * SECOND);
-    }
-    return;
-  }, [editorState]);
+  }, [setIsOpen]);
 
   const onChange = (val) => {
     console.log("onChange");
 
     if (!ws.current) return;
 
-    setEditorState(EditorState.TYPING);
+    clearTimeout(timerId);
 
     const messageData = val();
 
@@ -125,8 +103,9 @@ export default function Home() {
       window.alert("oh no, we're writing too much!");
     }
 
-    setMessage(makeMessage(messageData));
-    setEditorState(EditorState.WAITING);
+    timerId = setTimeout(() => {
+      ws.current.send(JSON.stringify(makeMessage(messageData)));
+    }, 2 * SECOND);
   };
 
   if (!isOpen) return "loading";
