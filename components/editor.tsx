@@ -1,4 +1,5 @@
 import { default as MarkdownEditor } from "rich-markdown-editor";
+import { Editor as DraftJSEditor, EditorState, ContentState } from "draft-js";
 
 import React, { useEffect, useRef, useState } from "react";
 
@@ -20,7 +21,11 @@ type ClientMessage = {
 
 const SECOND = 1_000;
 
-const SERVER_URL = "wss://ws.kahvipatel.com/write";
+const PROD_SERVER_URL = "wss://ws.kahvipatel.com/write";
+const DEV_SERVER_URL = "ws://localhost:8000/write";
+
+const SERVER_URL =
+  process.env.NODE_ENV == "development" ? DEV_SERVER_URL : PROD_SERVER_URL;
 
 const makeMessage = (data: string): ClientMessage => {
   return {
@@ -34,6 +39,10 @@ function Editor() {
   const ws = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
   const [initialVal, setInitialVal] = useState("");
+
+  const [editorState, setEditorState] = useState(() =>
+    EditorState.createEmpty()
+  );
   var timerId;
 
   const fetchInitial = () => {
@@ -60,14 +69,17 @@ function Editor() {
     ws.current.onclose = function (evt) {
       setIsOpen(false);
       ws.current = null;
-      console.log("CLOSE");
+      console.log("CLOSE: " + evt.code + " " + evt.reason);
     };
 
     ws.current.onmessage = function (evt) {
       const message = JSON.parse(evt.data);
 
       if (message["type"] == "first") {
-        setInitialVal(message["data"]);
+        const newState = EditorState.createWithContent(
+          ContentState.createFromText(message["data"])
+        );
+        setEditorState(newState);
       }
     };
 
@@ -84,17 +96,19 @@ function Editor() {
   }, [setIsOpen]);
 
   const onChange = (val) => {
+    setEditorState(val);
     if (!ws.current) return;
 
     clearTimeout(timerId);
 
-    const messageData: string = val();
+    const messageData: string = val.getCurrentContent().getPlainText();
 
     if (messageData.length > 536870888) {
       window.alert("uh oh, we're writing too much!");
     }
 
     timerId = setTimeout(() => {
+      console.log(messageData);
       ws.current.send(JSON.stringify(makeMessage(messageData)));
     }, 2 * SECOND);
   };
@@ -103,7 +117,7 @@ function Editor() {
 
   return (
     <main>
-      <MarkdownEditor value={initialVal} onChange={onChange} />
+      <DraftJSEditor editorState={editorState} onChange={onChange} />
     </main>
   );
 }
