@@ -3,8 +3,8 @@ import { default as MarkdownEditor } from "rich-markdown-editor";
 import React, { useEffect, useRef, useState } from "react";
 
 enum Status {
-  Success = "success",
-  Error = "error",
+  Leader = "leader",
+  Follower = "follower",
 }
 
 enum Type {
@@ -13,19 +13,25 @@ enum Type {
 }
 
 type ClientMessage = {
-  status: Status;
-  type: Type;
-  data: string;
+  type?: Type;
+  data?: string;
 };
+
+type ServerMessage = {
+  status: Status;
+  data?: string;
+} | null;
 
 const SECOND = 1_000;
 
-const SERVER_URL = "wss://ws.kahvipatel.com/write";
+const PROD_SERVER_URL = "wss://ws.kahvipatel.com/write";
+const DEV_SERVER_URL = "ws://localhost:8000/write";
+
+const SERVER_URL =
+  process.env.NODE_ENV == "development" ? DEV_SERVER_URL : PROD_SERVER_URL;
 
 const makeMessage = (data: string): ClientMessage => {
   return {
-    status: Status.Success,
-    type: Type.Normal,
     data,
   };
 };
@@ -33,16 +39,16 @@ const makeMessage = (data: string): ClientMessage => {
 function Editor() {
   const ws = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
-  const [initialVal, setInitialVal] = useState("");
+  const [editorState, setEditorState] = useState("");
+  const [messageState, setMessageState] = useState<ServerMessage>(null);
+  const [clientStatus, setClientStatus] = useState<Status>(Status.Follower);
   var timerId;
 
-  const fetchInitial = () => {
+  const sendInitial = () => {
     if (!ws.current) return;
 
     const message: ClientMessage = {
-      status: Status.Success,
       type: Type.First,
-      data: "",
     };
 
     ws.current.send(JSON.stringify(message));
@@ -53,7 +59,7 @@ function Editor() {
 
     ws.current.onopen = function (evt) {
       setIsOpen(true);
-      fetchInitial();
+      sendInitial();
       console.log("OPEN");
     };
 
@@ -64,10 +70,24 @@ function Editor() {
     };
 
     ws.current.onmessage = function (evt) {
-      const message = JSON.parse(evt.data);
+      const message: ServerMessage = JSON.parse(evt.data);
 
-      if (message["type"] == "first") {
-        setInitialVal(message["data"]);
+      console.log(message);
+
+      setMessageState(message);
+
+      if (message["type"] === "first") {
+        setEditorState(message["data"]);
+      }
+
+      switch (message["status"]) {
+        case Status.Leader:
+          setClientStatus(Status.Leader);
+          break;
+        case Status.Follower:
+          setClientStatus(Status.Follower);
+          setEditorState(message["data"]);
+          break;
       }
     };
 
@@ -103,7 +123,12 @@ function Editor() {
 
   return (
     <main>
-      <MarkdownEditor value={initialVal} onChange={onChange} />
+      {JSON.stringify(messageState)}
+      <MarkdownEditor
+        value={editorState}
+        onChange={onChange}
+        readOnly={clientStatus === Status.Follower}
+      />
     </main>
   );
 }
