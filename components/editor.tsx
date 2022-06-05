@@ -3,8 +3,8 @@ import { default as MarkdownEditor } from "rich-markdown-editor";
 import React, { useEffect, useRef, useState } from "react";
 
 enum Status {
-  Success = "success",
-  Error = "error",
+  Leader = "leader",
+  Follower = "follower",
 }
 
 enum Type {
@@ -13,19 +13,26 @@ enum Type {
 }
 
 type ClientMessage = {
-  status: Status;
-  type: Type;
-  data: string;
+  type?: Type;
+  data?: string;
 };
+
+type ServerMessage = {
+  status: Status;
+  data?: string;
+  type?: Type;
+} | null;
 
 const SECOND = 1_000;
 
-const SERVER_URL = "wss://ws.kahvipatel.com/write";
+const PROD_SERVER_URL = "wss://ws.kahvipatel.com/write";
+const DEV_SERVER_URL = "ws://localhost:8000/write";
+
+const SERVER_URL =
+  process.env.NODE_ENV == "development" ? DEV_SERVER_URL : PROD_SERVER_URL;
 
 const makeMessage = (data: string): ClientMessage => {
   return {
-    status: Status.Success,
-    type: Type.Normal,
     data,
   };
 };
@@ -33,16 +40,15 @@ const makeMessage = (data: string): ClientMessage => {
 function Editor() {
   const ws = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
-  const [initialVal, setInitialVal] = useState("");
+  const [editorState, setEditorState] = useState("");
+  const [clientStatus, setClientStatus] = useState<Status>(Status.Follower);
   var timerId;
 
-  const fetchInitial = () => {
+  const sendInitial = () => {
     if (!ws.current) return;
 
     const message: ClientMessage = {
-      status: Status.Success,
       type: Type.First,
-      data: "",
     };
 
     ws.current.send(JSON.stringify(message));
@@ -53,7 +59,7 @@ function Editor() {
 
     ws.current.onopen = function (evt) {
       setIsOpen(true);
-      fetchInitial();
+      sendInitial();
       console.log("OPEN");
     };
 
@@ -64,10 +70,17 @@ function Editor() {
     };
 
     ws.current.onmessage = function (evt) {
-      const message = JSON.parse(evt.data);
+      const message: ServerMessage = JSON.parse(evt.data);
 
-      if (message["type"] == "first") {
-        setInitialVal(message["data"]);
+      if (message["type"] === Type.First) {
+        setEditorState(message["data"]);
+      }
+
+      setClientStatus(message["status"]);
+
+      if (message["status"] == Status.Follower) {
+        setEditorState(message["data"]);
+        ws.current.send(JSON.stringify({ data: "" }));
       }
     };
 
@@ -81,7 +94,7 @@ function Editor() {
     return () => {
       wsCurr.close();
     };
-  }, [setIsOpen]);
+  }, []);
 
   const onChange = (val) => {
     if (!ws.current) return;
@@ -89,7 +102,6 @@ function Editor() {
     clearTimeout(timerId);
 
     const messageData: string = val();
-
     if (messageData.length > 536870888) {
       window.alert("uh oh, we're writing too much!");
     }
@@ -103,7 +115,13 @@ function Editor() {
 
   return (
     <main>
-      <MarkdownEditor value={initialVal} onChange={onChange} />
+      <div style={clientStatus === Status.Follower ? { opacity: "0.5" } : {}}>
+        <MarkdownEditor
+          value={editorState}
+          onChange={onChange}
+          readOnly={clientStatus === Status.Follower}
+        />
+      </div>
     </main>
   );
 }
