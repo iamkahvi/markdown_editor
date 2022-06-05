@@ -3,8 +3,8 @@ import { default as MarkdownEditor } from "rich-markdown-editor";
 import React, { useEffect, useRef, useState } from "react";
 
 enum Status {
-  Success = "success",
-  Error = "error",
+  Leader = "leader",
+  Follower = "follower",
 }
 
 enum Type {
@@ -13,17 +13,26 @@ enum Type {
 }
 
 type ClientMessage = {
-  status: Status;
-  type: Type;
-  data: string;
+  type?: Type;
+  data?: string;
 };
+
+type ServerMessage = {
+  status: Status;
+  data?: string;
+  type?: Type;
+} | null;
 
 const SECOND = 1_000;
 
+const PROD_SERVER_URL = "wss://ws.kahvipatel.com/write";
+const DEV_SERVER_URL = "ws://localhost:8000/write";
+
+const SERVER_URL =
+  process.env.NODE_ENV == "development" ? DEV_SERVER_URL : PROD_SERVER_URL;
+
 const makeMessage = (data: string): ClientMessage => {
   return {
-    status: Status.Success,
-    type: Type.Normal,
     data,
   };
 };
@@ -31,27 +40,26 @@ const makeMessage = (data: string): ClientMessage => {
 function Editor() {
   const ws = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
-  const [initialVal, setInitialVal] = useState("");
+  const [editorState, setEditorState] = useState("");
+  const [clientStatus, setClientStatus] = useState<Status>(Status.Follower);
   var timerId;
 
-  const fetchInitial = () => {
+  const sendInitial = () => {
     if (!ws.current) return;
 
     const message: ClientMessage = {
-      status: Status.Success,
       type: Type.First,
-      data: "",
     };
 
     ws.current.send(JSON.stringify(message));
   };
 
   useEffect(() => {
-    ws.current = new WebSocket("ws://142.93.152.73:8000/write");
+    ws.current = new WebSocket(SERVER_URL);
 
     ws.current.onopen = function (evt) {
       setIsOpen(true);
-      fetchInitial();
+      sendInitial();
       console.log("OPEN");
     };
 
@@ -62,12 +70,17 @@ function Editor() {
     };
 
     ws.current.onmessage = function (evt) {
-      const message = JSON.parse(evt.data);
-      console.log("RECEIVED: " + message);
-      if (message["type"] == "first") {
-        const initialText = message["data"];
-        console.log("setting state?: " + initialText);
-        setInitialVal(initialText);
+      const message: ServerMessage = JSON.parse(evt.data);
+
+      if (message["type"] === Type.First) {
+        setEditorState(message["data"]);
+      }
+
+      setClientStatus(message["status"]);
+
+      if (message["status"] == Status.Follower) {
+        setEditorState(message["data"]);
+        ws.current.send(JSON.stringify({ data: "" }));
       }
     };
 
@@ -81,19 +94,16 @@ function Editor() {
     return () => {
       wsCurr.close();
     };
-  }, [setIsOpen]);
+  }, []);
 
   const onChange = (val) => {
-    console.log("onChange");
-
     if (!ws.current) return;
 
     clearTimeout(timerId);
 
-    const messageData = val();
-
-    if (messageData > 536870888) {
-      window.alert("oh no, we're writing too much!");
+    const messageData: string = val();
+    if (messageData.length > 536870888) {
+      window.alert("uh oh, we're writing too much!");
     }
 
     timerId = setTimeout(() => {
@@ -101,9 +111,17 @@ function Editor() {
     }, 2 * SECOND);
   };
 
+  if (!isOpen) return <div>loading...</div>;
+
   return (
     <main>
-      <MarkdownEditor value={initialVal} onChange={onChange} />
+      <div style={clientStatus === Status.Follower ? { opacity: "0.5" } : {}}>
+        <MarkdownEditor
+          value={editorState}
+          onChange={onChange}
+          readOnly={clientStatus === Status.Follower}
+        />
+      </div>
     </main>
   );
 }

@@ -3,10 +3,9 @@ import dynamic from "next/dynamic";
 
 import React from "react";
 
-// wsd --url ws://localhost:8080/echo
-
 const EditorNoSSR = dynamic(() => import("../components/editor"), {
   ssr: false,
+  loading: () => <div>loading...</div>,
 });
 
 export default function Home() {
