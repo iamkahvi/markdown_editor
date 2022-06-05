@@ -5,6 +5,7 @@ import React from "react";
 
 const EditorNoSSR = dynamic(() => import("../components/editor"), {
   ssr: false,
+  loading: () => <div>loading...</div>,
 });
 
 export default function Home() {
