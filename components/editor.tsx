@@ -20,6 +20,7 @@ type ClientMessage = {
 type ServerMessage = {
   status: Status;
   data?: string;
+  type?: Type;
 } | null;
 
 const SECOND = 1_000;
@@ -40,7 +41,6 @@ function Editor() {
   const ws = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
   const [editorState, setEditorState] = useState("");
-  const [messageState, setMessageState] = useState<ServerMessage>(null);
   const [clientStatus, setClientStatus] = useState<Status>(Status.Follower);
   var timerId;
 
@@ -72,22 +72,15 @@ function Editor() {
     ws.current.onmessage = function (evt) {
       const message: ServerMessage = JSON.parse(evt.data);
 
-      console.log(message);
-
-      setMessageState(message);
-
-      if (message["type"] === "first") {
+      if (message["type"] === Type.First) {
         setEditorState(message["data"]);
       }
 
-      switch (message["status"]) {
-        case Status.Leader:
-          setClientStatus(Status.Leader);
-          break;
-        case Status.Follower:
-          setClientStatus(Status.Follower);
-          setEditorState(message["data"]);
-          break;
+      setClientStatus(message["status"]);
+
+      if (message["status"] == Status.Follower) {
+        setEditorState(message["data"]);
+        ws.current.send(JSON.stringify({ data: "" }));
       }
     };
 
@@ -101,7 +94,7 @@ function Editor() {
     return () => {
       wsCurr.close();
     };
-  }, [setIsOpen]);
+  }, []);
 
   const onChange = (val) => {
     if (!ws.current) return;
@@ -109,7 +102,6 @@ function Editor() {
     clearTimeout(timerId);
 
     const messageData: string = val();
-
     if (messageData.length > 536870888) {
       window.alert("uh oh, we're writing too much!");
     }
@@ -123,12 +115,13 @@ function Editor() {
 
   return (
     <main>
-      {JSON.stringify(messageState)}
-      <MarkdownEditor
-        value={editorState}
-        onChange={onChange}
-        readOnly={clientStatus === Status.Follower}
-      />
+      <div style={clientStatus === Status.Follower ? { opacity: "0.5" } : {}}>
+        <MarkdownEditor
+          value={editorState}
+          onChange={onChange}
+          readOnly={clientStatus === Status.Follower}
+        />
+      </div>
     </main>
   );
 }
