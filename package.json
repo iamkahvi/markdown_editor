@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3001",
     "build": "next build",
     "start": "next start"
   },
@@ -17,7 +17,8 @@
     "ws": "^8.2.3"
   },
   "devDependencies": {
-    "@types/react": "^17.0.30",
+    "@types/react": "17.0.45",
+    "@types/react-dom": "17.0.16",
     "typescript": "^4.4.4"
   }
 }

@@ -20,7 +20,7 @@ type ClientMessage = {
 
 const SECOND = 1_000;
 
-const SERVER_URL = "wss://ws.kahvipatel.com/write";
+const SERVER_URL = "ws://localhost:8000/write";
 
 const makeMessage = (data: string): ClientMessage => {
   return {
